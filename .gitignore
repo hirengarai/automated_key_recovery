@@ -1,0 +1,11 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.cpython-*.pyc
+
+# Results, constraints, and differential trails (generated output)
+results/
+constraints/
+differential_trails/
+constraints_milp_*
+constraints_sat_*

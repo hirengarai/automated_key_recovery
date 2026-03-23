@@ -1,0 +1,15 @@
+========== Trail ==========
+Type: differential
+Cipher: 1_round_AES_PERM
+Print the differential trail in hexadecimal format.
+Show Mode: First Layer of First and Last Round.
+######## Input: ########
+IN_: ab000000000000000000000000000000
+######## Function: PERMUTATION ########
+Round 1:
+Layer 0: ab000000000000000000000000000000
+######## Output: ########
+OUT_: 02010103000000000000000000000000
+
+Total Weight: 6.0
+rounds_diff_weight: [6.0]

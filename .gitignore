@@ -7,5 +7,4 @@ __pycache__/
 results/
 constraints/
 differential_trails/
-constraints_milp_*
-constraints_sat_*
+

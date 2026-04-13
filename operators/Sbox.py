@@ -578,7 +578,7 @@ class Sbox(Operator):  # Generic operator assigning a Sbox relationship between 
             return pr_variables, objective_fun
         return [], ""
 
-    def gen_autoguess_constr(self, *, flat_sbox_mode=True, non_square_strategy="bidirectional"):
+    def _gen_constr_autoguess(self, *, flat_sbox_mode=True, non_square_strategy="bidirectional"):
         """
         AutoGuess constraint for S-box (supports square and non-square).
 
@@ -594,7 +594,12 @@ class Sbox(Operator):  # Generic operator assigning a Sbox relationship between 
         in_ids = list(self._flatten_ids(self.input_vars))
         out_ids = list(self._flatten_ids(self.output_vars))
 
-        # Flat mode: treat the whole Sbox as a word-level relation
+        # Flat mode: treat the whole Sbox as a word-level relation.
+        # NONRENAME marker is critical: an S-box is a non-linear bijection,
+        # NOT an equality. Without the marker, the cleaner's `_is_rename`
+        # would classify any 2-token connection line as a rename and
+        # union-find-collapse the input/output, effectively replacing the
+        # S-box with the identity and linearising the cipher.
         if flat_sbox_mode:
             return [f"{', '.join(in_ids)}, {', '.join(out_ids)}"]
 

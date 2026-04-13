@@ -63,6 +63,7 @@ def guess_and_determine_attack(
     output_file=None,
     canonical=True,
     cross_round_dir=False,
+    bridge_skipped_rounds=True,
     # AutoGuess solver options
     solver="sat",
     findmin=False,
@@ -292,6 +293,7 @@ def guess_and_determine_attack(
         gf2linear_rename=gf2linear_rename,
         canonical=canonical,
         cross_round_dir=cross_round_dir,
+        bridge_skipped_rounds=bridge_skipped_rounds,
     )
 
     # Resolve output_file to absolute path (same logic as generate_relations)
@@ -570,6 +572,7 @@ def trail_to_key_recovery(
         gf2linear_rename=gf2linear_rename,
         canonical=canonical,
         cross_round_dir=cross_round_dir,
+        bridge_skipped_rounds=False,  # don't equate values across distinguisher
         solver=solver,
         findmin=findmin,
         maxguess=maxguess,

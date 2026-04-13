@@ -5,7 +5,7 @@ class AND(BinaryOperator):  # Operator for the bitwise AND operation: compute th
     def __init__(self, input_vars, output_vars, ID = None):
         super().__init__(input_vars, output_vars, ID = ID)
 
-    def gen_autoguess_constr(self):
+    def _gen_constr_autoguess(self):
         """
         AutoGuess constraint for AND: a & b = c.
 
@@ -75,7 +75,7 @@ class OR(BinaryOperator):  # Operator for the bitwise OR operation: compute the 
     def __init__(self, input_vars, output_vars, ID = None):
         super().__init__(input_vars, output_vars, ID = ID)
 
-    def gen_autoguess_constr(self):
+    def _gen_constr_autoguess(self):
         """
         AutoGuess constraint for OR: a | b = c.
 
@@ -143,7 +143,7 @@ class XOR(BinaryOperator):  # Operator for the bitwise XOR operation: compute th
     def __init__(self, input_vars, output_vars, ID = None):
         super().__init__(input_vars, output_vars, ID = ID)
 
-    def gen_autoguess_constr(self, *, algebraic_mode=False):
+    def _gen_constr_autoguess(self, *, algebraic_mode=False):
         """
         AutoGuess constraint for XOR: a ⊕ b = c.
 
@@ -221,7 +221,7 @@ class N_XOR(Operator): # Operator of the n-xor: a_0 xor a_1 xor ... xor a_n = b
     def __init__(self, input_vars, output_vars, ID = None):
         super().__init__(input_vars, output_vars, ID = ID)
 
-    def gen_autoguess_constr(self, *, algebraic_mode=False):
+    def _gen_constr_autoguess(self, *, algebraic_mode=False):
         """
         AutoGuess constraint for N-way XOR: a₀ ⊕ a₁ ⊕ ... ⊕ aₙ = b.
 
@@ -310,7 +310,7 @@ class NOT(UnaryOperator): # Operator for the bitwise NOT operation: compute the 
     def __init__(self, input_vars, output_vars, ID = None):
         super().__init__(input_vars, output_vars, ID = ID)
 
-    def gen_autoguess_constr(self):
+    def _gen_constr_autoguess(self):
         """
         AutoGuess constraint for NOT: ~a = b.
 
@@ -353,7 +353,7 @@ class ConstantXOR(UnaryOperator): # Operator for the constant addition using xor
         self.table = constant_table
         self.table_r, self.table_i = round, index
 
-    def gen_autoguess_constr(self, *, algebraic_mode=False, **_):
+    def _gen_constr_autoguess(self, *, algebraic_mode=False, **_):
         """
         AutoGuess constraint for ConstantXOR: x ⊕ c = y (c is known constant).
 
@@ -419,7 +419,7 @@ class ANDXOR(Operator):  # Operator for the bitwise AND-XOR operation: compute t
     def __init__(self, input_vars, output_vars, ID = None):
         super().__init__(input_vars, output_vars, ID = ID)
 
-    def gen_autoguess_constr(self):
+    def _gen_constr_autoguess(self):
         """
         AutoGuess constraint for ANDXOR: (a & b) ^ c = d.
 

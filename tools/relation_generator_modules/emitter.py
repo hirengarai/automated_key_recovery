@@ -1,7 +1,7 @@
 """
 Relation Emitter — walk an OCP cipher and emit raw AutoGuess relations.
 
-Each OCP operator (XOR, Sbox, Equal, …) has a gen_autoguess_constr() method
+Each OCP operator (XOR, Sbox, Equal, …) has a _gen_constr_autoguess() method
 that returns relation strings like "a, b, c" (connection) or "a + b + c"
 (algebraic). This module walks the cipher's round/layer/operator structure
 and collects all those strings.
@@ -134,7 +134,7 @@ def _layer_matches_filter(ops: list, filters: Set[str]) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Calling gen_autoguess_constr with the right kwargs
+# Calling _gen_constr_autoguess with the right kwargs
 # ---------------------------------------------------------------------------
 
 def _call_gen_autoguess(
@@ -147,12 +147,12 @@ def _call_gen_autoguess(
     nonrename_gf2: bool,
 ) -> List[str]:
     """
-    Call op.gen_autoguess_constr() with whatever kwargs it supports.
+    Call op._gen_constr_autoguess() with whatever kwargs it supports.
 
     Different operators accept different subsets of parameters.
     We use inspect.signature to only pass what the method accepts.
     """
-    gen = op.gen_autoguess_constr
+    gen = op._gen_constr_autoguess
     supported = set(inspect.signature(gen).parameters.keys())
 
     kwargs = {}
@@ -191,6 +191,7 @@ def _add_gap_links(
     kept_rounds: List[int],
     nlayers: int,
     link_eq_skipped: bool = False,
+    bridge_skipped_rounds: bool = True,
 ) -> List[str]:
     """
     Generate rename relations to bridge gaps from skipped layers/rounds.
@@ -243,6 +244,12 @@ def _add_gap_links(
         last_layer = min(prev_layers[-1] + 1, nlayers)
         first_layer = next_layers[0] if next_layers else 0
 
+        # Don't bridge across skipped rounds when disabled (key recovery:
+        # the distinguisher guarantees a *difference* relation, not a value
+        # equality, so linking values across it is wrong).
+        if not bridge_skipped_rounds and (next_r - prev_r > 1):
+            continue
+
         # Add links if: layer 0 was skipped, rounds were skipped between
         # these two, LINK_EQ ops were stripped, or next round has no
         # active layers (its layer-0 vars may be referenced by other functions)
@@ -273,6 +280,7 @@ def emit_function(
     nonrename_perm: bool = False,
     nonrename_rot: bool = False,
     nonrename_gf2: bool = False,
+    bridge_skipped_rounds: bool = True,
 ) -> List[str]:
     """
     Walk one OCP function and return raw relation strings.
@@ -338,7 +346,7 @@ def emit_function(
                     continue
 
                 # Must have the method
-                if not hasattr(op, "gen_autoguess_constr"):
+                if not hasattr(op, "_gen_constr_autoguess"):
                     continue
 
                 # Determine algebraic mode
@@ -378,7 +386,8 @@ def emit_function(
     # When any rounds are skipped, ALL LINK_EQ ops are stripped (line above),
     # so we must generate cross-round links for consecutive kept rounds too.
     gap_links = _add_gap_links(func, active_layers, kept_rounds, nlayers,
-                               link_eq_skipped=bool(skip_round_set))
+                               link_eq_skipped=bool(skip_round_set),
+                               bridge_skipped_rounds=bridge_skipped_rounds)
     relations.extend(gap_links)
 
     return relations

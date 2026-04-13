@@ -18,11 +18,11 @@ perm = AES_PERMUTATION(r=1)
 trails = attacks.diff_attacks(
     perm,
     goal="DIFFERENTIALPATH_PROB",
-    config_model={"model_type": "milp"}
+    config_model={"model_type": "sat"}
 )
 
 trail = trails[0]
-trail.print_trail(show_mode=2)
+# trail.print_trail(show_mode=2)
 
 cipher = AES_BLOCKCIPHER(r=2, version=[128, 128])
 
@@ -37,3 +37,8 @@ result = attacks.trail_to_key_recovery(
     maxguess=16,
     maxsteps=25,
 )
+
+# guessed = result.get("guessed_variables", [])
+# print(f"Guesses: {len(guessed)}")
+# for v in guessed:
+#     print(f"  {v.ID}")

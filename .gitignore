@@ -3,8 +3,33 @@ __pycache__/
 *.py[cod]
 *.cpython-*.pyc
 
+# Virtual environments
+env312/
+.venv/
+venv/
+
+# macOS
+.DS_Store
+
 # Results, constraints, and differential trails (generated output)
 results/
 constraints/
 differential_trails/
 
+# Solver / modelling artifacts (regenerated on every run)
+files/*.cnf
+files/*.lp
+files/*_differential_trail.json
+files/*_differential_trail.txt
+files/sbox_modeling/
+
+# AutoGuess output
+test/**/files/output_*
+test/**/*.gv
+test/**/*_graph.pdf
+
+# Reference PDFs — keep outside the repo
+articles/*.pdf
+
+# Local-only files
+CLAUDE.md

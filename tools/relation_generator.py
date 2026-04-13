@@ -143,6 +143,7 @@ def generate_relations(
     cross_round_dir: bool = False,
     debug_cross_renames: bool = False,
     strict_anchored: bool = False,
+    bridge_skipped_rounds: bool = True,
 ) -> List[str]:
     """
     Generate AutoGuess-compatible relation file from an OCP cipher or function.
@@ -223,6 +224,7 @@ def generate_relations(
         nonrename_perm=nonrename_perm,
         nonrename_rot=nonrename_rot,
         nonrename_gf2=nonrename_gf2,
+        bridge_skipped_rounds=bridge_skipped_rounds,
     )
 
     if function_mode:

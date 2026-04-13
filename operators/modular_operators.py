@@ -8,7 +8,7 @@ class ModAdd(BinaryOperator): # Operator for the modular addition: add the two i
         super().__init__(input_vars, output_vars, ID = ID)
         self.modulo = modulo
 
-    def gen_autoguess_constr(self):
+    def _gen_constr_autoguess(self):
         """
         AutoGuess constraint for ModAdd: (a + b) mod 2^n = c.
 
@@ -226,7 +226,7 @@ class ModMul(BinaryOperator):  # Operator for the modular multiplication: multip
         self.modulo = None
         pass # TODO
 
-    def gen_autoguess_constr(self):
+    def _gen_constr_autoguess(self):
         """
         AutoGuess constraint for ModMul: (a * b) mod 2^n = c.
 
@@ -268,7 +268,7 @@ class ConstantAdd(UnaryOperator): # Operator for the constant addition: use modu
         self.table = constant_table
         self.table_r, self.table_i = round, index
 
-    def gen_autoguess_constr(self):
+    def _gen_constr_autoguess(self):
         """
         AutoGuess constraint for ConstantAdd: (x + c) mod 2^n = y.
 

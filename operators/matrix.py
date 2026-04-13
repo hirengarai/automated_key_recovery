@@ -305,7 +305,7 @@ class Matrix(Operator):   # Operator of the Matrix multiplication: appplies the 
         elif model_type == 'cp': RaiseExceptionVersionNotExisting(str(self.__class__.__name__), self.model_version, model_type)
         else: raise Exception(str(self.__class__.__name__) + ": unknown model type '" + model_type + "'")
 
-    def gen_autoguess_constr(self, algebraic_mode=False):
+    def _gen_constr_autoguess(self, algebraic_mode=False):
         """
         AutoGuess constraint for Matrix multiplication (e.g., MDS layer).
 
@@ -352,7 +352,7 @@ class GF2Linear_Trans(UnaryOperator):  # Operator for the linear transformation 
         self.mat = mat
         self.constants = constants
 
-    def gen_autoguess_constr(self, *, algebraic_mode=False, treat_as_nonrename=False):
+    def _gen_constr_autoguess(self, *, algebraic_mode=False, treat_as_nonrename=False):
         """
         AutoGuess constraint for GF2Linear_Trans (bijective binary matrix on a word).
 

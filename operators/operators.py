@@ -136,7 +136,7 @@ class CopyOperator(Operator):  # Operator that duplicates one input into multipl
             raise Exception(f"{self.__class__.__name__}: your output must contain at least 2 element")
         super().__init__(input_vars, output_vars, ID=ID)
 
-    def gen_autoguess_constr(self):
+    def _gen_constr_autoguess(self):
         """
         AutoGuess constraint for Copy (input duplicated to multiple outputs).
 
@@ -218,7 +218,7 @@ class Equal(UnaryOperator):  # Operator assigning equality between the input var
     def __init__(self, input_vars, output_vars, ID = None):
         super().__init__(input_vars, output_vars, ID = ID)
 
-    def gen_autoguess_constr(self, *, algebraic_mode=False, treat_as_nonrename=False):
+    def _gen_constr_autoguess(self, *, algebraic_mode=False, treat_as_nonrename=False):
         """
         AutoGuess constraint for Equal (a = b).
 
@@ -301,7 +301,7 @@ class Rot(UnaryOperator):     # Operator for the rotation function: rotation of 
             else: return ["assign " + self.get_var_ID('out', 0, unroll) + ' = `ROTL(' + self.get_var_ID('in', 0, unroll) + ', ' + str(self.amount) + ', ' + str(self.input_vars[0].bitsize) + ');']
         else: raise Exception(str(self.__class__.__name__) + ": unknown implementation type '" + implementation_type + "'")
 
-    def gen_autoguess_constr(self, *, treat_as_nonrename=False):
+    def _gen_constr_autoguess(self, *, treat_as_nonrename=False):
         """
         AutoGuess constraint for Rotation.
 
@@ -370,7 +370,7 @@ class Shift(UnaryOperator):    # Operator for the shift function: shift of the i
             return ["assign " + self.get_var_ID('out', 0, unroll) + ' = (' + self.get_var_ID('in', 0, unroll) + [" >> " if self.direction == 'r' else " << "][0] + str(self.amount) + ') & ((1<<' + str(self.input_vars[0].bitsize) + ') - 1);']
         else: raise Exception(str(self.__class__.__name__) + ": unknown implementation type '" + implementation_type + "'")
 
-    def gen_autoguess_constr(self):
+    def _gen_constr_autoguess(self):
         """
         AutoGuess constraint for Shift.
 

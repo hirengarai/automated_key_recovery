@@ -278,15 +278,33 @@ def _build_same_round_map(
                 f"in class {sorted(cls)}"
             )
 
-        # Collapse non-anchored to rep, keep anchored distinct
-        for v in cls:
-            if v not in anchored_in_cls and v != rep:
-                sub_map[v] = rep
+        # --- FIX (2026-04): collapse everything to rep, same as 0/1-anchored case. ---
+        # The original "preserved equality chain" logic (commented out below) was
+        # designed for SPARSE anchored sets. Under DENSE anchoring — e.g. when
+        # trail_to_key_recovery stuffs every state variable into `not_guessed` —
+        # it fails to coordinate with the cross-round substitution pass, leaving
+        # orphaned variable names (like `vs_2_0_0`) in preserved rename lines
+        # that were never substituted in the not_guessed section. Autoguess then
+        # sees those orphaned names as free variables and "guesses" state cells,
+        # producing spurious state-variable leakage in the guess set.
+        #
+        # TO REVERT: delete the 4 lines below marked "# NEW" and uncomment the
+        # block further down.
+        for v in cls:                              # NEW
+            if v != rep:                           # NEW
+                sub_map[v] = rep                   # NEW
+        continue                                   # NEW
 
-        # Output equality chain among anchored + rep
-        keep = sorted(anchored_in_cls | {rep}, key=lambda v: _rank_var(v))
-        for i in range(len(keep) - 1):
-            preserved.append(f"{keep[i]}, {keep[i+1]}")
+        # --- ORIGINAL PRESERVED-CHAIN LOGIC (kept commented for easy revert) ---
+        # # Collapse non-anchored to rep, keep anchored distinct
+        # for v in cls:
+        #     if v not in anchored_in_cls and v != rep:
+        #         sub_map[v] = rep
+        #
+        # # Output equality chain among anchored + rep
+        # keep = sorted(anchored_in_cls | {rep}, key=lambda v: _rank_var(v))
+        # for i in range(len(keep) - 1):
+        #     preserved.append(f"{keep[i]}, {keep[i+1]}")
 
     return sub_map, preserved
 
@@ -546,6 +564,15 @@ def clean_relations(
     known = _apply_sub_to_varlist(known, sub_maps)
     target = _apply_sub_to_varlist(target, sub_maps)
     not_guessed = _apply_sub_to_varlist(not_guessed, sub_maps)
+
+    # Post-substitution: known takes precedence over not_guessed.
+    # After rename-collapse, a not_guessed state var can end up sharing a
+    # canonical rep with a known var (e.g. a bottom-row cell at a deeper
+    # layer collapsing to its layer-0 plaintext rep). Emitting both
+    # creates contradictory unit clauses in the SAT encoding (var is
+    # forced TRUE by `known` and FALSE by `not_guessed` at step 0).
+    known_set = set(known)
+    not_guessed = [v for v in not_guessed if v not in known_set]
 
     # Step 8: Optionally preserve cross-round renames (debug only)
     preserved_cross = []

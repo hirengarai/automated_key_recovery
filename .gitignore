@@ -5,6 +5,12 @@
 *.pyc
 files/*
 files/autoguess/
+# ...but the solver encodings are inputs, not output: they take minutes to
+# regenerate and the result depends on which logic-minimisation backend is
+# installed, so a fresh clone would otherwise reach a different (equally
+# optimal) trail. OCP pins matrix_modeling for the same reason.
+!files/matrix_modeling/
+!files/sbox_modeling/
 test/autoguess/files/
 temp/
 .pytest_cache/

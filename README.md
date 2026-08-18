@@ -1,4 +1,4 @@
-# key_reco_2
+# key_reco
 
 Differential **key-recovery** cost estimation on top of
 [OCP](https://github.com/Open-CP/OCP) and AutoGuess.

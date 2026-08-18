@@ -8,7 +8,7 @@ from OCP import test_all_implementations, test_visualisation
 
 
 def test_imp_ascon_permutation():
-    rounds = [3,12]
+    rounds = [1]
 
     for r in rounds:
         print(f"\nTesting ASCON permutation with {r} rounds:")

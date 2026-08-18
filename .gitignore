@@ -1,35 +1,29 @@
-# Python bytecode
-__pycache__/
-*.py[cod]
-*.cpython-*.pyc
 
-# Virtual environments
-env312/
-.venv/
-venv/
-
-# macOS
+*.c
+*.lp
+*.pdf
+*.pyc
+files/*
+files/autoguess/
+test/autoguess/files/
+temp/
+.pytest_cache/
+**/temp/
 .DS_Store
+env312/
+venv/
+.venv/
+env/
 
-# Results, constraints, and differential trails (generated output)
+# machine-local editor/assistant settings
+.claude/settings.local.json
+__pycache__/
+
+# carried over from the previous key-recovery repository
+*.py[cod]
 results/
 constraints/
 differential_trails/
-
-# Solver / modelling artifacts (regenerated on every run)
-files/*.cnf
-files/*.lp
-files/*_differential_trail.json
-files/*_differential_trail.txt
-files/sbox_modeling/
-
-# AutoGuess output
 test/**/files/output_*
 test/**/*.gv
-test/**/*_graph.pdf
-
-# Reference PDFs — keep outside the repo
-articles/*.pdf
-
-# Local-only files
 CLAUDE.md

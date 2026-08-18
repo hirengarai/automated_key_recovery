@@ -8,16 +8,6 @@ class ModAdd(BinaryOperator): # Operator for the modular addition: add the two i
         super().__init__(input_vars, output_vars, ID = ID)
         self.modulo = modulo
 
-    def _gen_constr_autoguess(self):
-        """
-        AutoGuess constraint for ModAdd: (a + b) mod 2^n = c.
-
-        Connection relation "a, b, c" — knowing any 2 determines the 3rd
-        (modular addition is invertible: c - b = a, c - a = b).
-        """
-        all_ids = [v.ID for v in self.input_vars] + [self.output_vars[0].ID]
-        return [", ".join(all_ids)]
-
     def generate_implementation(self, implementation_type='python', unroll=False):
         if implementation_type == 'python':
             if self.modulo == None:
@@ -39,7 +29,7 @@ class ModAdd(BinaryOperator): # Operator for the modular addition: add the two i
     def generate_model(self, model_type='sat'):
         model_list = []
         if model_type == 'sat':
-            if self.model_version in [self.__class__.__name__ + "_XORDIFF"]: # Reference: Ling Sun, et al. Accelerating the Search of Differential and Linear Characteristics with the SAT Method
+            if self.model_version in [self.__class__.__name__ + "_XORDIFF"]: # Reference: [1] Nicky Mouha and Bart Preneel. Towards finding optimal differential charac- teristics for ARX. [2] Ling Sun, Wei Wang, and Meiqin Wang. Accelerating the search of differential and linear characteristics with the SAT method
                 var_in1, var_in2, var_out = (self.get_var_model("in", 0),  self.get_var_model("in", 1), self.get_var_model("out", 0))
                 n = self.input_vars[0].bitsize
                 var_p = [self.ID + '_p_' + str(i) for i in range(n - 1)]
@@ -213,10 +203,91 @@ class ModAdd(BinaryOperator): # Operator for the modular addition: add the two i
                 model_list.append('Binary\n' +  ' '.join(v for v in var_in1 + var_in2 + var_out + var_p))
                 self.weight = [" + ".join(var_p[:self.input_vars[0].bitsize])]
                 return model_list
+            elif self.model_version == self.__class__.__name__ + "_INTEGRAL_TWOSUBSET":
+                # Sun et al. modulo model: z_i = x_i xor y_i xor c_i,
+                # c_i = x_{i+1}y_{i+1} xor (x_{i+1} xor y_{i+1})c_{i+1}, c_{n-1}=0.
+                var_in1, var_in2, var_out = (self.get_var_model("in", 0), self.get_var_model("in", 1), self.get_var_model("out", 0))
+                n = self.input_vars[0].bitsize
+                var_aux = [self.ID + '_integral_' + str(i) for i in range(12 * n - 19)] if n > 1 else []
+
+                if n == 1:
+                    model_list += [var_in1[0] + ' + ' + var_in2[0] + ' - ' + var_out[0] + ' = 0']
+                else:
+                    carry = {}
+                    aux_index = 0
+                    i = n - 1
+                    x_z, x_c, y_z, y_c, carry[i - 1] = var_aux[aux_index:aux_index + 5]
+                    aux_index += 5
+                    model_list += [var_in1[i] + ' - ' + x_z + ' - ' + x_c + ' = 0']
+                    model_list += [var_in2[i] + ' - ' + y_z + ' - ' + y_c + ' = 0']
+                    model_list += [x_z + ' + ' + y_z + ' - ' + var_out[i] + ' = 0']
+                    model_list += [carry[i - 1] + ' - ' + x_c + ' >= 0']
+                    model_list += [carry[i - 1] + ' - ' + y_c + ' >= 0']
+                    model_list += [carry[i - 1] + ' - ' + x_c + ' - ' + y_c + ' <= 0']
+
+                    for i in range(n - 2, 0, -1):
+                        x_z, x_and, x_xor, y_z, y_and, y_xor = var_aux[aux_index:aux_index + 6]
+                        c_z, c_and, xy_and, xy_xor, carry_and, carry[i - 1] = var_aux[aux_index + 6:aux_index + 12]
+                        aux_index += 12
+                        model_list += [var_in1[i] + ' - ' + x_z + ' - ' + x_and + ' - ' + x_xor + ' = 0']
+                        model_list += [var_in2[i] + ' - ' + y_z + ' - ' + y_and + ' - ' + y_xor + ' = 0']
+                        model_list += [carry[i] + ' - ' + c_z + ' - ' + c_and + ' = 0']
+                        model_list += [x_z + ' + ' + y_z + ' + ' + c_z + ' - ' + var_out[i] + ' = 0']
+                        model_list += [xy_and + ' - ' + x_and + ' >= 0']
+                        model_list += [xy_and + ' - ' + y_and + ' >= 0']
+                        model_list += [xy_and + ' - ' + x_and + ' - ' + y_and + ' <= 0']
+                        model_list += [x_xor + ' + ' + y_xor + ' - ' + xy_xor + ' = 0']
+                        model_list += [carry_and + ' - ' + xy_xor + ' >= 0']
+                        model_list += [carry_and + ' - ' + c_and + ' >= 0']
+                        model_list += [carry_and + ' - ' + xy_xor + ' - ' + c_and + ' <= 0']
+                        model_list += [xy_and + ' + ' + carry_and + ' - ' + carry[i - 1] + ' = 0']
+
+                    model_list += [var_in1[0] + ' + ' + var_in2[0] + ' + ' + carry[0] + ' - ' + var_out[0] + ' = 0']
+
+                model_list.append('Binary\n' + ' '.join(v for v in var_in1 + var_in2 + var_out + var_aux))
+                self.weight = []
+                return model_list
             else:
                 RaiseExceptionVersionNotExisting(str(self.__class__.__name__), self.model_version, model_type)
         elif model_type == 'cp': RaiseExceptionVersionNotExisting(str(self.__class__.__name__), self.model_version, model_type)
         else: raise Exception(str(self.__class__.__name__) + ": unknown model type '" + model_type + "'")
+        
+    def gen_autoguess_constr(self):
+        """
+        Generate Autoguess-style constraints for Modulo Addition operation.
+        Emits connection relation "a, b, c" indicating a + b = c (mod 2^n).
+        
+        Supports:
+        - Standard 2-input modular addition: a + b = c (mod 2^n)
+        - Multi-input modular addition: a + b + d + ... = c (mod 2^n)
+        """
+        
+        def _flatten(vars_):
+            for v in vars_:
+                if isinstance(v, (list, tuple)):
+                    for u in v:
+                        yield u
+                else:
+                    yield v
+        
+        try:
+            in_vars = [v.ID for v in _flatten(self.input_vars)]
+            out_vars = [v.ID for v in _flatten(self.output_vars)]
+            
+            if not in_vars or not out_vars:
+                return [f"# ModAdd {getattr(self, 'ID', '?')}: empty inputs or outputs"]
+            
+            if len(out_vars) != 1:
+                return [f"# ModAdd {getattr(self, 'ID', '?')}: expected 1 output, got {len(out_vars)}"]
+            
+            # Generate constraint: all inputs and output
+            all_vars = in_vars + out_vars
+            return [", ".join(all_vars)]
+        
+        except AttributeError:
+            return [f"# ModAdd {getattr(self, 'ID', '?')}: missing input_vars or output_vars"]
+        except Exception:
+            return [f"# Error formatting ModAdd {getattr(self, 'ID', '?')}"]
 
 
 class ModMul(BinaryOperator):  # Operator for the modular multiplication: multiply the two input variables together towards the output variable
@@ -225,18 +296,6 @@ class ModMul(BinaryOperator):  # Operator for the modular multiplication: multip
         super().__init__(input_vars, output_vars, ID = ID )
         self.modulo = None
         pass # TODO
-
-    def _gen_constr_autoguess(self):
-        """
-        AutoGuess constraint for ModMul: (a * b) mod 2^n = c.
-
-        Connection relation "a, b, c" — overapproximation
-        (multiplication by 0 is not invertible, but acceptable for analysis).
-        """
-        a = self.input_vars[0].ID
-        b = self.input_vars[1].ID
-        c = self.output_vars[0].ID
-        return [f"{a}, {b}, {c}"]
 
     def generate_implementation(self, implementation_type='python', unroll=False):
         if implementation_type == 'python':
@@ -267,17 +326,6 @@ class ConstantAdd(UnaryOperator): # Operator for the constant addition: use modu
         self.modulo = modulo
         self.table = constant_table
         self.table_r, self.table_i = round, index
-
-    def _gen_constr_autoguess(self):
-        """
-        AutoGuess constraint for ConstantAdd: (x + c) mod 2^n = y.
-
-        The constant c is known, so knowing x determines y and vice versa.
-        Connection relation "x, y" (rename).
-        """
-        x = self.input_vars[0].ID
-        y = self.output_vars[0].ID
-        return [f"{x}, {y}"]
 
     def generate_implementation(self, implementation_type='python', unroll=False):
         if unroll==True: my_constant=hex(self.table[self.table_r-1][self.table_i])

@@ -18,6 +18,7 @@ class AES_permutation(Permutation):
         """
         if nbr_rounds==None: nbr_rounds=10
         if represent_mode==0: nbr_layers, nbr_words, nbr_temp_words, word_bitsize = (4, 16, 0, 8)
+        else: raise ValueError(f"[ERROR] The represent_mode {represent_mode} is not supported for AES_permutation.")
         super().__init__(name, s_input, s_output, nbr_rounds, [nbr_layers, nbr_words, nbr_temp_words, word_bitsize])
         full_rounds = 10
 
@@ -29,14 +30,23 @@ class AES_permutation(Permutation):
             for i in range(1,nbr_rounds+1):
                 S.SboxLayer("SB", i, 0, AES_Sbox) # Sbox layer
                 S.PermutationLayer("SR", i, 1, [0,5,10,15, 4,9,14,3, 8,13,2,7, 12,1,6,11]) # Shiftrows layer
-                if i != full_rounds: S.MatrixLayer("MC", i, 2, [[2,3,1,1], [1,2,3,1], [1,1,2,3], [3,1,1,2]], [[0,1,2,3], [4,5,6,7], [8,9,10,11], [12,13,14,15]], "0x1B")  #Mixcolumns layer
+                if i != nbr_rounds: # the final round omits MixColumns. To analyze a reduced-round AES (keeping MixColumns in every round), replace nbr_rounds with full_rounds here so the omission only happens at the true last AES round.
+                    S.MatrixLayer("aes_matrix", i, 2, [[2,3,1,1], [1,2,3,1], [1,1,2,3], [3,1,1,2]], [[0,1,2,3], [4,5,6,7], [8,9,10,11], [12,13,14,15]], "0x1B")  #Mixcolumns layer
                 else: S.AddIdentityLayer("ID", i, 2)     # Identity layer
                 S.AddConstantLayer("AC", i, 3, "xor", [True]*16, constant_table)  # Constant layer. The constants are derived from the Rcon table
 
     def gen_rounds_constant_table(self):
+        # For the AES permutation we add an extra round-constant addition to enhance security.
+        # The round constants are taken from the Rcon table of the AES design document (FIPS-197).
         constant_table = []
+        nbr_rounds = self.functions["PERMUTATION"].nbr_rounds
         Rcon = [0x01000000, 0x02000000, 0x04000000, 0x08000000, 0x10000000, 0x20000000, 0x40000000, 0x80000000, 0x1B000000, 0x36000000]
-        for i in range(1,self.functions["PERMUTATION"].nbr_rounds+1):
+        # If more than 10 rounds are needed, extend Rcon by GF(2^8) doubling (xtime) of the previous constant.
+        for i in range(len(Rcon), nbr_rounds):
+            prev = Rcon[i-1]>>24&0xff
+            rc = ((prev << 1) ^ 0x11B) if (prev & 0x80) else (prev << 1)
+            Rcon.append(rc << 24)
+        for i in range(1,nbr_rounds+1):
             constant_table.append([Rcon[i-1]>>24&0xff, Rcon[i-1]>>16&0xff, Rcon[i-1]>>8&0xff, Rcon[i-1]&0xff] * 4)
         return constant_table
 
@@ -69,22 +79,26 @@ class AES_block_cipher(Block_cipher):
         """
 
         p_bitsize, k_bitsize = version[0], version[1]
+        assert p_bitsize == 128, f"[ERROR] For AES, the plaintext bit size is fixed to 128. The provided bit size is {p_bitsize}."
+        assert k_bitsize in [128, 192, 256], f"[ERROR] For AES, the key bit size should be either 128, 192 or 256. The provided bit size is {k_bitsize}."
         if nbr_rounds==None: nbr_rounds=10 if version[1]==128 else 12 if version[1]==192 else 14 if version[1]==256  else None
         nbr_rounds += 1
+        print(f"[INFO] For {name}, after {nbr_rounds-1} round transformations, there is still a final AddRoundKey layer. Hence, the internal modeling round number is set to {nbr_rounds}. Please keep this in mind when interpreting subsequent relative files.")
         if represent_mode==0:
             if k_bitsize==128:
                 (s_nbr_layers, s_nbr_words, s_nbr_temp_words, s_word_bitsize), (k_nbr_layers, k_nbr_words, k_nbr_temp_words, k_word_bitsize), (sk_nbr_layers, sk_nbr_words, sk_nbr_temp_words, sk_word_bitsize) = (4, 16, 0, 8),  (7, int(16*k_bitsize / p_bitsize), 4, 8),  (1, 16, 0, 8)
                 k_nbr_rounds, k_perm = nbr_rounds, [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,13,14,15,12]
                 full_rounds=11
-            if k_bitsize==192:
+            elif k_bitsize==192:
                 (s_nbr_layers, s_nbr_words, s_nbr_temp_words, s_word_bitsize), (k_nbr_layers, k_nbr_words, k_nbr_temp_words, k_word_bitsize), (sk_nbr_layers, sk_nbr_words, sk_nbr_temp_words, sk_word_bitsize) = (4, 16, 0, 8),  (9, int(16*k_bitsize / p_bitsize), 4, 8),  (1, 16, 0, 8)
                 k_nbr_rounds, k_perm = int((nbr_rounds+1)/1.5),  [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,21,22,23,20]
                 full_rounds=13
-            if k_bitsize==256:
+            elif k_bitsize==256:
                 (s_nbr_layers, s_nbr_words, s_nbr_temp_words, s_word_bitsize), (k_nbr_layers, k_nbr_words, k_nbr_temp_words, k_word_bitsize), (sk_nbr_layers, sk_nbr_words, sk_nbr_temp_words, sk_word_bitsize) = (4, 16, 0, 8),  (13, int(16*k_bitsize / p_bitsize), 8, 8),  (1, 16, 0, 8)
                 k_nbr_rounds, k_perm = int((nbr_rounds+1)/2),  [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,29,30,31,28]
                 full_rounds=15
             nk = int(k_bitsize/32)
+        else: raise ValueError(f"[ERROR] The represent_mode {represent_mode} is not supported for AES_block_cipher.")
         super().__init__(name, p_input, k_input, c_output, nbr_rounds, k_nbr_rounds, [s_nbr_layers, s_nbr_words, s_nbr_temp_words, s_word_bitsize], [k_nbr_layers, k_nbr_words, k_nbr_temp_words, k_word_bitsize], [sk_nbr_layers, sk_nbr_words, sk_nbr_temp_words, sk_word_bitsize])
 
         S = self.functions["PERMUTATION"]
@@ -138,8 +152,8 @@ class AES_block_cipher(Block_cipher):
                 S.AddRoundKeyLayer("ARK", i, 0, XOR, SK, mask=[1 for i in range(16)])  # AddRoundKey layer
                 S.SboxLayer("SB", i, 1, AES_Sbox) # Sbox layer
                 S.PermutationLayer("SR", i, 2, [0,5,10,15, 4,9,14,3, 8,13,2,7, 12,1,6,11]) # Shiftrows layer
-                if i != (nbr_rounds-1):
-                    S.MatrixLayer("MC", i, 3, matrix, matrix_index, "0x1B")  # Mixcolumns layer
+                if i != (nbr_rounds-1): # the final round omits MixColumns. To analyze a reduced-round AES (keeping MixColumns in every round), replace nbr_rounds with full_rounds here so the omission only happens at the true last AES round.
+                    S.MatrixLayer("aes_matrix", i, 3, matrix, matrix_index, "0x1B")  # Mixcolumns layer
                 else: # In the final round, MixColumn is omitted
                     S.AddIdentityLayer("ID", i, 3) # Identity layer
             S.AddRoundKeyLayer("ARK", nbr_rounds, 0, XOR, SK, mask=[1 for i in range(16)])  # AddRoundKey layer
@@ -171,7 +185,7 @@ class AES_block_cipher(Block_cipher):
             key = [0x60, 0x3D, 0xEB, 0x10, 0x15, 0xCA, 0x71, 0xBE, 0x2B, 0x73, 0xAE, 0xF0,  0x85, 0x7D, 0x77, 0x81, 0x1F, 0x35, 0x2C, 0x07, 0x3B, 0x61, 0x08, 0xD7, 0x2D, 0x98, 0x10, 0xA3, 0x09, 0x14, 0xDF, 0xF4]
             ciphertext = [0xf3, 0xee, 0xd1, 0xbd, 0xb5, 0xd2, 0xa0, 0x3c, 0x6, 0x4b, 0x5a, 0x7e, 0x3d, 0xb1, 0x81, 0xf8]
             self.test_vectors.append([[plaintext, key], ciphertext])
-        
+
 def AES_BLOCKCIPHER(r=None, version = [128, 128], represent_mode=0, copy_operator=False):
     my_plaintext, my_key, my_ciphertext = [var.Variable(8,ID="in"+str(i)) for i in range(16)], [var.Variable(8,ID="k"+str(i)) for i in range(int(16*version[1]/version[0]))], [var.Variable(8,ID="out"+str(i)) for i in range(16)]
     my_cipher = AES_block_cipher(f"AES{version[1]}", version, my_plaintext, my_key, my_ciphertext, nbr_rounds=r, represent_mode=represent_mode)

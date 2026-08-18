@@ -5,19 +5,6 @@ class AND(BinaryOperator):  # Operator for the bitwise AND operation: compute th
     def __init__(self, input_vars, output_vars, ID = None):
         super().__init__(input_vars, output_vars, ID = ID)
 
-    def _gen_constr_autoguess(self):
-        """
-        AutoGuess constraint for AND: a & b = c.
-
-        Connection relation "a, b, c" — this is an overapproximation
-        (knowing a and c doesn't always determine b), but acceptable
-        for guess-and-determine analysis.
-        """
-        a = self.input_vars[0].ID
-        b = self.input_vars[1].ID
-        c = self.output_vars[0].ID
-        return [f"{a}, {b}, {c}"]
-
     def generate_implementation(self, implementation_type='python', unroll=False):
         if implementation_type == 'python':
             return [self.get_var_ID('out', 0, unroll) + ' = ' + self.get_var_ID('in', 0, unroll) + ' & ' + self.get_var_ID('in', 1, unroll)]
@@ -66,6 +53,13 @@ class AND(BinaryOperator):  # Operator for the bitwise AND operation: compute th
                 model_list.append('Binary\n' +  ' '.join(v for v in var_in1 + var_in2 + var_out + var_p))
                 self.weight = [" + ".join(var_p)]
                 return model_list
+            elif self.model_version == self.__class__.__name__ + "_INTEGRAL_TWOSUBSET":
+                var_in1, var_in2, var_out = (self.get_var_model("in", 0), self.get_var_model("in", 1), self.get_var_model("out", 0))
+                for i in range(len(var_in1)):
+                    i1, i2, o = var_in1[i], var_in2[i], var_out[i]
+                    model_list += [f'{o} - {i1} >= 0', f'{o} - {i2} >= 0', f'{o} - {i1} - {i2} <= 0']
+                model_list.append('Binary\n' +  ' '.join(v for v in var_in1 + var_in2 + var_out))
+                return model_list
             else: RaiseExceptionVersionNotExisting(str(self.__class__.__name__), self.model_version, model_type)
         elif model_type == 'cp': RaiseExceptionVersionNotExisting(str(self.__class__.__name__), self.model_version, model_type)
         else: raise Exception(str(self.__class__.__name__) + ": unknown model type '" + model_type + "'")
@@ -74,17 +68,6 @@ class AND(BinaryOperator):  # Operator for the bitwise AND operation: compute th
 class OR(BinaryOperator):  # Operator for the bitwise OR operation: compute the bitwise OR on the two input variables towards the output variable
     def __init__(self, input_vars, output_vars, ID = None):
         super().__init__(input_vars, output_vars, ID = ID)
-
-    def _gen_constr_autoguess(self):
-        """
-        AutoGuess constraint for OR: a | b = c.
-
-        Connection relation "a, b, c" — overapproximation, same reasoning as AND.
-        """
-        a = self.input_vars[0].ID
-        b = self.input_vars[1].ID
-        c = self.output_vars[0].ID
-        return [f"{a}, {b}, {c}"]
 
     def generate_implementation(self, implementation_type='python', unroll=False):
         if implementation_type == 'python':
@@ -143,18 +126,6 @@ class XOR(BinaryOperator):  # Operator for the bitwise XOR operation: compute th
     def __init__(self, input_vars, output_vars, ID = None):
         super().__init__(input_vars, output_vars, ID = ID)
 
-    def _gen_constr_autoguess(self, *, algebraic_mode=False):
-        """
-        AutoGuess constraint for XOR: a ⊕ b = c.
-
-        algebraic_mode=True:  "a + b + c"  (represents a ⊕ b ⊕ c = 0)
-        algebraic_mode=False: "a, b, c"    (connection: any 2 determine the 3rd)
-        """
-        all_ids = list(self._flatten_ids(self.input_vars)) + list(self._flatten_ids(self.output_vars))
-        if algebraic_mode:
-            return [" + ".join(all_ids)]
-        return [", ".join(all_ids)]
-
     def generate_implementation(self, implementation_type='python', unroll=False):
         if implementation_type == 'python':
             return [self.get_var_ID('out', 0, unroll) + ' = ' + self.get_var_ID('in', 0, unroll) + ' ^ ' + self.get_var_ID('in', 1, unroll)]
@@ -212,26 +183,61 @@ class XOR(BinaryOperator):  # Operator for the bitwise XOR operation: compute th
                 model_list += [f'{var_in1[0]} - {var_out[0]} = 0', f'{var_in2[0]} - {var_out[0]} = 0']
                 model_list.append('Binary\n' +  ' '.join(v for v in var_in1 + var_in2 + var_out))
                 return model_list
+            elif model_type == 'milp' and self.model_version == self.__class__.__name__ + "_INTEGRAL_TWOSUBSET":
+                var_in1, var_in2, var_out = (self.get_var_model("in", 0), self.get_var_model("in", 1), self.get_var_model("out", 0))
+                for i in range(len(var_in1)):
+                    i1, i2, o = var_in1[i], var_in2[i], var_out[i]
+                    model_list += [f'{i1} + {i2} - {o} = 0']
+                model_list.append('Binary\n' +  ' '.join(v for v in var_in1 + var_in2 + var_out))
+                return model_list
             else: RaiseExceptionVersionNotExisting(str(self.__class__.__name__), self.model_version, model_type)
         elif model_type == 'cp': RaiseExceptionVersionNotExisting(str(self.__class__.__name__), self.model_version, model_type)
         else: raise Exception(str(self.__class__.__name__) + ": unknown model type '" + model_type + "'")
+        
+    def gen_autoguess_constr(self, *, algebraic_mode=False):
+        """
+        Generate Autoguess-style constraint for XOR.
+        - algebraic_mode=False (default): connection triple  "a, b, c"
+        - algebraic_mode=True:             algebraic form     "a + b + c"
+
+        Supports n-input XOR: a ⊕ b ⊕ ... = c. Configuration errors raise;
+        see :meth:`Equal.gen_autoguess_constr` for rationale.
+        """
+
+        def _flatten(vars_):
+            for v in vars_:
+                if isinstance(v, (list, tuple)):
+                    for u in v:
+                        yield u
+                else:
+                    yield v
+
+        opid = getattr(self, 'ID', '?')
+        in_vars = [v.ID for v in _flatten(self.input_vars)]
+        out_vars = [v.ID for v in _flatten(self.output_vars)]
+
+        if not in_vars or not out_vars:
+            raise ValueError(
+                f"XOR {opid}: empty inputs or outputs "
+                f"(in={len(in_vars)}, out={len(out_vars)})"
+            )
+
+        if len(out_vars) != 1:
+            raise ValueError(
+                f"XOR {opid}: expected 1 output, got {len(out_vars)}"
+            )
+
+        all_vars = in_vars + out_vars
+
+        if algebraic_mode:
+            return [" + ".join(all_vars)]
+        else:
+            return [", ".join(all_vars)]
 
 
 class N_XOR(Operator): # Operator of the n-xor: a_0 xor a_1 xor ... xor a_n = b
     def __init__(self, input_vars, output_vars, ID = None):
         super().__init__(input_vars, output_vars, ID = ID)
-
-    def _gen_constr_autoguess(self, *, algebraic_mode=False):
-        """
-        AutoGuess constraint for N-way XOR: a₀ ⊕ a₁ ⊕ ... ⊕ aₙ = b.
-
-        algebraic_mode=True:  "a0 + a1 + ... + an + b"
-        algebraic_mode=False: "a0, a1, ..., an, b"  (any N determine the last)
-        """
-        all_ids = list(self._flatten_ids(self.input_vars)) + list(self._flatten_ids(self.output_vars))
-        if algebraic_mode:
-            return [" + ".join(all_ids)]
-        return [", ".join(all_ids)]
 
     def generate_implementation(self, implementation_type='python', unroll=False):
         if implementation_type == 'python':
@@ -263,7 +269,7 @@ class N_XOR(Operator): # Operator of the n-xor: a_0 xor a_1 xor ... xor a_n = b
                     if model_type == 'milp' and version in [0]:
                         d = self.ID + '_d_' + str(i)
                     elif model_type == 'milp' and version in [1]:
-                        d = [f"{self.ID}_d_{i}_{j}" for j in range(int((len(self.input_vars)+1)/2))]                
+                        d = [f"{self.ID}_d_{i}_{j}" for j in range(int((len(self.input_vars)+1)/2))]
                     else:
                         d = None
                     model_list.extend(gen_nxor_constraints(var_in[i], var_out[i], model_type, v_dummy=d, version=version))
@@ -310,17 +316,6 @@ class NOT(UnaryOperator): # Operator for the bitwise NOT operation: compute the 
     def __init__(self, input_vars, output_vars, ID = None):
         super().__init__(input_vars, output_vars, ID = ID)
 
-    def _gen_constr_autoguess(self):
-        """
-        AutoGuess constraint for NOT: ~a = b.
-
-        NOT is bijective (equivalent to XOR with all-ones constant),
-        so knowing either variable determines the other.
-        """
-        a = self.input_vars[0].ID
-        b = self.output_vars[0].ID
-        return [f"{a}, {b}"]
-
     def generate_implementation(self, implementation_type='python', unroll=False):
         if implementation_type == 'python':
             return [self.get_var_ID('out', 0, unroll) + ' = ' + self.get_var_ID('in', 0, unroll) + ' ^ ' + hex(2**self.input_vars[0].bitsize - 1)]
@@ -352,20 +347,6 @@ class ConstantXOR(UnaryOperator): # Operator for the constant addition using xor
         super().__init__(input_vars, output_vars, ID = ID)
         self.table = constant_table
         self.table_r, self.table_i = round, index
-
-    def _gen_constr_autoguess(self, *, algebraic_mode=False, **_):
-        """
-        AutoGuess constraint for ConstantXOR: x ⊕ c = y (c is known constant).
-
-        The constant is known, so knowing x determines y and vice versa.
-        Connection relation "x, y" (rename).
-        No algebraic form because x + y = c is non-homogeneous.
-        """
-        x = self.input_vars[0].ID
-        y = self.output_vars[0].ID
-        if algebraic_mode:
-            return []  # can't express x + y = constant in homogeneous form
-        return [f"{x}, {y}"]
 
     def generate_implementation(self, implementation_type='python', unroll=False):
         if unroll==True: my_constant=hex(self.table[self.table_r-1][self.table_i])
@@ -413,21 +394,34 @@ class ConstantXOR(UnaryOperator): # Operator for the constant addition using xor
             else: RaiseExceptionVersionNotExisting(str(self.__class__.__name__), self.model_version, model_type)
         elif model_type == 'cp': RaiseExceptionVersionNotExisting(str(self.__class__.__name__), self.model_version, model_type)
         else: raise Exception(str(self.__class__.__name__) + ": unknown model type '" + model_type + "'")
+        
+    def gen_autoguess_constr(self, *, algebraic_mode: bool = False):
+        """
+        AutoGuess view of constant addition:
+        - We ignore the actual constant value and just keep the wiring.
+        - No algebraic relation, because x ⊕ c = y gives x + y = c (non-homogeneous);
+          algebraic_mode=True returns an empty list rather than lying.
+        """
+        opid = getattr(self, 'ID', 'CONSTADD')
+        try:
+            x = self.input_vars[0].ID   # before constant
+            y = self.output_vars[0].ID  # after constant
+        except (AttributeError, IndexError) as e:
+            raise ValueError(
+                f"ConstantXOR {opid}: malformed input_vars/output_vars ({e})"
+            ) from e
+
+        if algebraic_mode:
+            return []
+        else:
+            # In connection relations, treat as rename for structure / connectivity.
+            return [f"{x}, {y}"]
 
 
 class ANDXOR(Operator):  # Operator for the bitwise AND-XOR operation: compute the bitwise AND then XOR on the three input variables towards the output variable
+    # out = (in0 & in1) ^ in2
     def __init__(self, input_vars, output_vars, ID = None):
         super().__init__(input_vars, output_vars, ID = ID)
-
-    def _gen_constr_autoguess(self):
-        """
-        AutoGuess constraint for ANDXOR: (a & b) ^ c = d.
-
-        4-variable connection relation. Knowing all 3 inputs determines
-        the output. This is an overapproximation for the reverse direction.
-        """
-        all_ids = [v.ID for v in self.input_vars] + [self.output_vars[0].ID]
-        return [", ".join(all_ids)]
 
     def generate_implementation(self, implementation_type='python', unroll=False):
         if implementation_type == 'python':
@@ -441,24 +435,107 @@ class ANDXOR(Operator):  # Operator for the bitwise AND-XOR operation: compute t
     def generate_model(self, model_type='sat'):
         model_list = []
         if model_type == 'sat':
-            RaiseExceptionVersionNotExisting(str(self.__class__.__name__), self.model_version, model_type)
-        elif model_type == 'milp':
-            if self.model_version in [self.__class__.__name__ + "_XORDIFF", self.__class__.__name__ + "_XORDIFF_1", self.__class__.__name__ + "_XORDIFF_2", self.__class__.__name__ + "_XORDIFF_3"]:
+            if self.model_version in [self.__class__.__name__ + "_XORDIFF"]:
                 var_in1, var_in2, var_in3, var_out = (self.get_var_model("in", 0),  self.get_var_model("in", 1), self.get_var_model("in", 2), self.get_var_model("out", 0))
                 var_p = [self.ID + '_p_' + str(i) for i in range(self.input_vars[0].bitsize)]
                 for i in range(len(var_in1)):
                     i1, i2, i3, o, p = var_in1[i], var_in2[i], var_in3[i], var_out[i], var_p[i]
                     if self.model_version in [self.__class__.__name__ + "_XORDIFF"]:
-                        model_list += [f'{p} - {i1} >= 0', f'{p} - {i2} >= 0', f'{p} - {i1} - {i2} <= 0', f'{i1} + {i2} + {i3} - {o} >= 0', f'{i1} + {i2} - {i3} + {o} >= 0']
+                        model_list += [f'{i1} {i2} -{p}', f'{i1} {i2} -{i3} {o}', f'-{i1} {p}', f'{i1} {i2} {i3} -{o}', f'-{i2} {p}']
+                self.weight = var_p
+                return model_list
+            elif self.model_version in [self.__class__.__name__ + "_LINEAR"]:
+                var_in1, var_in2, var_in3, var_out = (self.get_var_model("in", 0), self.get_var_model("in", 1), self.get_var_model("in", 2), self.get_var_model("out", 0))
+                var_p = [self.ID + '_p_' + str(i) for i in range(self.input_vars[0].bitsize)]
+                for i in range(len(var_in1)):
+                    i1, i2, i3, o, p = var_in1[i], var_in2[i], var_in3[i], var_out[i], var_p[i]
+                    model_list += [f'-{i3} {p}', f'-{i1} {p}', f'-{i2} {p}', f'{i3} -{o}', f'{o} -{p}']
+                self.weight = var_p
+                return model_list
+            else:
+                RaiseExceptionVersionNotExisting(str(self.__class__.__name__), self.model_version, model_type)
+        elif model_type == 'milp':
+            if self.model_version in [self.__class__.__name__ + "_XORDIFF", self.__class__.__name__ + "_XORDIFF_1"]:
+                var_in1, var_in2, var_in3, var_out = (self.get_var_model("in", 0),  self.get_var_model("in", 1), self.get_var_model("in", 2), self.get_var_model("out", 0))
+                var_p = [self.ID + '_p_' + str(i) for i in range(self.input_vars[0].bitsize)]
+                for i in range(len(var_in1)):
+                    i1, i2, i3, o, p = var_in1[i], var_in2[i], var_in3[i], var_out[i], var_p[i]
+                    if self.model_version in [self.__class__.__name__ + "_XORDIFF"]:
+                        model_list += [f'{p} - {i1} >= 0', f'{p} - {i2} >= 0', f'{i1} + {i2} - {p} >= 0', f'{i1} + {i2} + {i3} - {o} >= 0', f'{i1} + {i2} - {i3} + {o} >= 0']
                     elif self.model_version == self.__class__.__name__ + "_XORDIFF_1":
-                        model_list += [f'{p} = 0 -> {i1} = 0', f'{p} = 0 -> {i2} = 0', f'{p} = 1 -> {i1} + {i2} >= 1', f'{i1} + {i2} + {i3} - {o} >= 0', f'{i1} + {i2} - {i3} + {o} >= 0']
-                    elif self.model_version == self.__class__.__name__ + "_XORDIFF_2":
-                        model_list += [f'{p} = 0 -> {i1} = 0', f'{p} = 0 -> {i2} = 0', f'{p} = 0 -> {i3} - {o} = 0', f'{p} = 1 -> {i1} + {i2} >= 1']
-                    elif self.model_version == self.__class__.__name__ + "_XORDIFF_3":
-                        model_list += [f'{p} = 0 -> {i1} = 0', f'{p} = 0 -> {i2} = 0', f'{p} = 0 -> {i3} - {o} = 0', f'{p} - {i1} - {i2} <= 0']
+                        model_list += [f'{p} - {i1} >= 0', f'{p} - {i2} >= 0', f'{i1} + {i2} - {p} >= 0', f'{o} - {i3} + {p} >= 0', f'{i3} - {o} + {p} >= 0']
+                model_list.append('Binary\n' +  ' '.join(v for v in var_in1 + var_in2 + var_in3 + var_out + var_p))
+                self.weight = [" + ".join(var_p)]
+                return model_list
+            elif self.model_version in [self.__class__.__name__ + "_LINEAR", self.__class__.__name__ + "_LINEAR_1"]:
+                var_in1, var_in2, var_in3, var_out = (self.get_var_model("in", 0),  self.get_var_model("in", 1), self.get_var_model("in", 2), self.get_var_model("out", 0))
+                var_p = [self.ID + '_p_' + str(i) for i in range(self.input_vars[0].bitsize)]
+                for i in range(len(var_in1)):
+                    i1, i2, i3, o, p = var_in1[i], var_in2[i], var_in3[i], var_out[i], var_p[i]
+                    if self.model_version in [self.__class__.__name__ + "_LINEAR"]:
+                        model_list += [f'{p} - {i1} >= 0', f'{p} - {i2} >= 0', f'{p} - {i3} >= 0', f'{i3} - {o} >= 0', f'{o} - {p} >= 0']
+                    elif self.model_version == self.__class__.__name__ + "_LINEAR_1":
+                        model_list += [f'{i3} - {i2} >= 0', f'{o} - {i3} >= 0', f'{i3} - {i1} >= 0', f'{i3} - {o} >= 0', f'{p} - {i3} >= 0', f'{i3} - {p} >= 0']
                 model_list.append('Binary\n' +  ' '.join(v for v in var_in1 + var_in2 + var_in3 + var_out + var_p))
                 self.weight = [" + ".join(var_p)]
                 return model_list
             else: RaiseExceptionVersionNotExisting(str(self.__class__.__name__), self.model_version, model_type)
         elif model_type == 'cp': RaiseExceptionVersionNotExisting(str(self.__class__.__name__), self.model_version, model_type)
         else: raise Exception(str(self.__class__.__name__) + ": unknown model type '" + model_type + "'")
+
+
+    @staticmethod
+    def _eval_bit(x): # x = in0 || in1 || in2
+        in0 = (x >> 2) & 1
+        in1 = (x >> 1) & 1
+        in2 = x & 1
+        return (in0 & in1) ^ in2
+
+    @staticmethod
+    def bit_andxor_ddt(): # ddt[dx][dy] = #{x : F(x) ^ F(x ^ dx) = dy}
+        ddt = [[0 for _ in range(2)] for _ in range(8)]
+        for dx in range(8):
+            for x in range(8):
+                dy = ANDXOR._eval_bit(x) ^ ANDXOR._eval_bit(x ^ dx)
+                ddt[dx][dy] += 1
+        return ddt
+
+    @staticmethod
+    def bit_andxor_lat(): # lat[a][b] = sum_x (-1)^(<a,x> ^ <b,F(x)>)
+        def parity(x):
+            return bin(x).count("1") & 1
+        lat = [[0 for _ in range(2)] for _ in range(8)]
+        for a in range(8):      # input mask
+            for b in range(2):  # output mask
+                s = 0
+                for x in range(8):
+                    e = parity(a & x) ^ parity(b & ANDXOR._eval_bit(x))
+                    s += 1 if e == 0 else -1
+                lat[a][b] = s
+        return lat
+    
+    @staticmethod
+    def bit_andxor_diff_truth_table(): # Return possible differential propagation truth table. Each row is [din0, din1, din2, dout, weight], where weight = -log2(Pr[din -> dout])
+        ddt = ANDXOR.bit_andxor_ddt()
+        ttable = ''
+        for n in range(1 << 5):  # 3 input diff bits + 1 output diff bit + 1 weight bit
+            dx = n >> 2
+            dy = (n >> 1) & 1
+            wbit = n & 1
+            c = ddt[dx][dy]
+
+            ttable += '1' if (c == 8 and wbit == 0) or (c == 4 and wbit == 1) else '0'
+
+        return ttable
+
+    @staticmethod
+    def bit_andxor_linear_truth_table(): # Return linear-mask propagation truth table. Each row is [min0, min1, min2, mout, weight], where weight = -log2(Cor(mask_in, mask_out)). 
+        lat = ANDXOR.bit_andxor_lat()
+        ttable = ''
+        for n in range(1 << 5):  # 3 input mask bits + 1 output mask bit + 1 weight bit
+            mx = n >> 2
+            my = (n >> 1) & 1
+            wbit = n & 1
+            c = abs(lat[mx][my])
+            ttable += '1' if (c == 8 and wbit == 0) or (c == 4 and wbit == 1) else '0'
+        return ttable

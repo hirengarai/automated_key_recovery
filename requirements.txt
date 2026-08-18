@@ -1,0 +1,33 @@
+# Dependencies for the differential key-recovery attacks
+# (test/key_recovery/) on a clean machine. Verified from an empty venv on both
+# Python 3.12.13 and 3.14.3: with exactly these, present_80_attack.py,
+# rectangle_attack.py, skinny_64_attack.py and run_attack.py all run to
+# completion. Re-verified 2026-08-18 from an empty venv on 3.12.13.
+#
+#   python3 -m venv env
+#   ./env/bin/pip install -r requirements.txt
+#
+numpy                 # operators/matrix.py
+python-sat[pblib]     # SAT backend (cadical153); pblib supplies AutoGuess' cardinality encoding
+py-aiger              # imported by tools/autoguess/core/gdsat.py
+graphviz              # imported by tools/autoguess/core/graphdrawer.py, even when drawgraph is off
+dot2tex               # same
+pytest                # test/key_recovery/test_*.py only; not needed to run an attack
+
+# Versions last verified (2026-08-18): python-sat 1.9.dev15 on Python 3.12.13.
+# Earlier runs used numpy 2.5.2, python-sat 1.9.dev13, py-aiger 8.1.0,
+# graphviz 0.21, dot2tex 2.12.0.
+#
+# On python-sat in particular: attacks that inject a published distinguisher
+# (build_manual_trail) are insensitive to its version -- PRESENT-80 and
+# RECTANGLE-80 give bit-identical reports under 1.9.dev2 and 1.9.dev13. Attacks
+# that SEARCH for their distinguisher are not: the minimum-weight trail is
+# generally not unique, and different python-sat versions return different
+# (equally optimal) trails. skinny_64_attack.py yields d_in/d_out = 40/40 under
+# 1.9.dev2 and 16/60 under 1.9.dev5 and later. Pin the distinguisher, or the
+# python-sat version, for anything you intend to publish.
+
+# NOT required for key recovery. Each is imported behind a try/except and only
+# prints a warning when missing: gurobipy (no Gurobi licence needed), pyscipopt,
+# ortools, pysmt, z3, minizinc, pyeda, pycddlib, numba, matplotlib, psutil.
+# Install psutil if you want the runtime/CPU figures in the solver logs.

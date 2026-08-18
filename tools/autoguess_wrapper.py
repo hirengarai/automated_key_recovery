@@ -19,11 +19,11 @@ This wrapper handles that path setup, then exposes a simple function:
 AutoGuess itself is NOT modified — it stays self-contained.
 """
 
+import functools
 import os
 import re
 import sys
 from pathlib import Path
-
 
 # Path to the autoguess directory inside OCP
 _AUTOGUESS_DIR = Path(__file__).resolve().parent / "autoguess"
@@ -38,6 +38,8 @@ def _with_autoguess_path(func):
       - sys.path to include its own directory (for 'from core.xxx' imports)
       - cwd to be its own directory (for 'temp/' relative paths)
     """
+
+    @functools.wraps(func)
     def wrapper(*args, **kwargs):
         old_path = sys.path[:]
         old_cwd = os.getcwd()
@@ -53,8 +55,11 @@ def _with_autoguess_path(func):
 
             # Override TEMP_DIR to store temp files in test/autoguess/files/temp/
             import config as ag_config
+
             old_temp_dir = ag_config.TEMP_DIR
-            temp_dir = str(_AUTOGUESS_DIR.parents[1] / "test" / "autoguess" / "files" / "temp")
+            temp_dir = str(
+                _AUTOGUESS_DIR.parents[1] / "test" / "autoguess" / "files" / "temp"
+            )
             ag_config.TEMP_DIR = temp_dir
             os.makedirs(temp_dir, exist_ok=True)
 
@@ -118,78 +123,81 @@ def _parse_autoguess_output(output_path, vars_dict):
         determination_steps
     """
     result = {
-        'outputfile': output_path,
-        'known_variables': [],
-        'target_variables': [],
-        'guessed_variables': [],
-        'determination_steps': [],
+        "outputfile": output_path,
+        "known_variables": [],
+        "target_variables": [],
+        "guessed_variables": [],
+        "determination_steps": [],
     }
 
     if not os.path.exists(output_path):
         return result
 
-    with open(output_path, 'r') as f:
+    with open(output_path, "r") as f:
         content = f.read()
 
-    separator = '############################################################'
+    separator = "############################################################"
     sections = content.split(separator)
 
     def _resolve_vars(id_string):
         """Split comma-separated var IDs and resolve to Variable objects."""
-        ids = [v.strip() for v in id_string.split(',') if v.strip()]
+        ids = [v.strip() for v in id_string.split(",") if v.strip()]
         resolved = []
         for vid in ids:
             # Strip dummy annotations like " (represents: ...)"
-            clean_id = vid.split(' (represents:')[0].strip()
+            clean_id = vid.split(" (represents:")[0].strip()
             if clean_id in vars_dict:
                 resolved.append(vars_dict[clean_id])
         return resolved
+
+    # parsesolution.py writes the separator after every State block, so the
+    # determination flow is split across multiple chunks. current_step must
+    # persist across sections to accumulate State 0, State 1, ...
+    current_step = None
 
     for section in sections:
         stripped = section.strip()
 
         # Guessed variables section
-        if 'variable(s) are guessed:' in stripped:
-            lines = stripped.split('\n')
+        if "variable(s) are guessed:" in stripped:
+            lines = stripped.split("\n")
             for line in lines:
-                if 'variable(s) are guessed:' in line:
+                if "variable(s) are guessed:" in line:
                     continue
                 if line.strip():
-                    result['guessed_variables'] = _resolve_vars(line)
+                    result["guessed_variables"] = _resolve_vars(line)
 
         # Known variables section
-        elif 'variable(s) are initially known:' in stripped:
-            lines = stripped.split('\n')
+        elif "variable(s) are initially known:" in stripped:
+            lines = stripped.split("\n")
             for line in lines:
-                if 'variable(s) are initially known:' in line:
+                if "variable(s) are initially known:" in line:
                     continue
                 if line.strip():
-                    result['known_variables'] = _resolve_vars(line)
+                    result["known_variables"] = _resolve_vars(line)
 
         # Target variables section
-        elif stripped.startswith('Target variables:'):
-            lines = stripped.split('\n')
+        elif stripped.startswith("Target variables:"):
+            lines = stripped.split("\n")
             for line in lines[1:]:
                 if line.strip():
-                    result['target_variables'] = _resolve_vars(line)
+                    result["target_variables"] = _resolve_vars(line)
 
-        # Determination flow section
-        elif stripped.startswith('Determination flow:'):
-            lines = stripped.split('\n')
-            current_step = None
-            for line in lines:
-                state_match = re.match(r'State\s+(\d+):', line)
+        # Determination flow: header chunk OR a continuation State X chunk
+        elif stripped.startswith("Determination flow:") or re.match(
+            r"State\s+\d+:", stripped
+        ):
+            for line in stripped.split("\n"):
+                state_match = re.match(r"State\s+(\d+):", line)
                 if state_match:
                     current_step = {
-                        'step': int(state_match.group(1)),
-                        'determined_vars': [],
+                        "step": int(state_match.group(1)),
+                        "determined_vars": [],
                     }
-                    result['determination_steps'].append(current_step)
-                elif current_step is not None and '===>' in line:
-                    # Extract the determined variable (after ===>)
-                    rhs = line.split('===>')[1].strip()
-                    determined = _resolve_vars(rhs)
-                    current_step['determined_vars'].extend(determined)
+                    result["determination_steps"].append(current_step)
+                elif current_step is not None and "===>" in line:
+                    rhs = line.split("===>")[1].strip()
+                    current_step["determined_vars"].extend(_resolve_vars(rhs))
 
     return result
 
@@ -277,32 +285,34 @@ def run_autoguess(
     """
     # Build params dict
     params = _default_params()
-    params.update({
-        "inputfile": str(inputfile),
-        "outputfile": outputfile,
-        "solver": solver,
-        "maxguess": maxguess,
-        "maxsteps": maxsteps,
-        "findmin": findmin,
-        "reducebasis": reducebasis,
-        "known": known,
-        "drawgraph": drawgraph,
-        "satsolver": satsolver,
-        "smtsolver": smtsolver,
-        "cpsolver": cpsolver,
-        "milpdirection": milpdirection,
-        "cpoptimization": cpoptimization,
-        "timelimit": timelimit,
-        "preprocess": preprocess,
-        "D": D,
-        "tikz": tikz,
-        "log": log,
-        "threads": threads,
-        "dglayout": dglayout,
-        "term_ordering": term_ordering,
-        "overlapping_number": overlapping_number,
-        "cnf_to_anf_conversion": cnf_to_anf_conversion,
-    })
+    params.update(
+        {
+            "inputfile": str(inputfile),
+            "outputfile": outputfile,
+            "solver": solver,
+            "maxguess": maxguess,
+            "maxsteps": maxsteps,
+            "findmin": findmin,
+            "reducebasis": reducebasis,
+            "known": known,
+            "drawgraph": drawgraph,
+            "satsolver": satsolver,
+            "smtsolver": smtsolver,
+            "cpsolver": cpsolver,
+            "milpdirection": milpdirection,
+            "cpoptimization": cpoptimization,
+            "timelimit": timelimit,
+            "preprocess": preprocess,
+            "D": D,
+            "tikz": tikz,
+            "log": log,
+            "threads": threads,
+            "dglayout": dglayout,
+            "term_ordering": term_ordering,
+            "overlapping_number": overlapping_number,
+            "cnf_to_anf_conversion": cnf_to_anf_conversion,
+        }
+    )
 
     # Import and run autoguess (inside the path context)
     from autoguess import startsearch, checkenvironment
@@ -310,17 +320,16 @@ def run_autoguess(
     checkenvironment()
 
     if reducebasis:
-        from core.search import search_using_reducebasis
-        search_using_reducebasis(params)
-    else:
-        startsearch(params)
+        params["solver"] = "propagate"
+        params["reducebasis"] = True
+    startsearch(params)
 
     # If a cipher/function was provided, parse output and return Variable objects
     if cipher_or_function is not None:
-        vars_dict = getattr(cipher_or_function, 'vars_dictionary', {})
-        output_path = str(_AUTOGUESS_DIR / params['outputfile'])
+        vars_dict = getattr(cipher_or_function, "vars_dictionary", {})
+        output_path = str(_AUTOGUESS_DIR / params["outputfile"])
         result = _parse_autoguess_output(output_path, vars_dict)
-        result['cipher'] = cipher_or_function
+        result["cipher"] = cipher_or_function
         return result
 
     return params

@@ -90,7 +90,7 @@ def print_ordering_row(step, unit, stage, new_key_ids):
     print()
 
 
-def print_summary(*, C_KR_log2, N_log2, total_K_bits, T_log2,
+def print_summary(*, C_KR_log2, total_K_bits, T_log2,
                   key_size_bits, valid_attack, D_log2=None, block_bits=None):
     """Final Summary block.
 
@@ -111,8 +111,7 @@ def print_summary(*, C_KR_log2, N_log2, total_K_bits, T_log2,
     print("\nSummary")
     print(f"  C_KR (ESTIMATE)      : 2^{C_KR_log2:.2f}")
     print(f"  Guess basis          : {total_K_bits}")
-    print(f"  T = C_KR * N         : 2^{T_log2:.2f}   "
-          f"(= 2^{C_KR_log2:.2f} * 2^{N_log2:.2f}; key-recovery work, data cost excluded)")
+    print(f"  T = C_KR * N         : 2^{T_log2:.2f}")
     if D_log2 is not None and block_bits is not None and D_log2 > block_bits:
         print(f"  [WARN] D = 2^{D_log2:.2f} exceeds the 2^{block_bits} codebook: "
               f"the attack needs more data than the cipher has.")

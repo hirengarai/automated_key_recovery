@@ -90,44 +90,29 @@ def print_ordering_row(step, unit, stage, new_key_ids):
     print()
 
 
-def print_summary(*, C_KR_log2, N_log2, total_K_bits, T_log2, total_filter_bits,
+def print_summary(*, C_KR_log2, N_log2, total_K_bits, T_log2,
                   key_size_bits, valid_attack, D_log2=None, block_bits=None):
-    """Final Summary block. Time = C_KR * N; data complexity is excluded from
-    the cost and the validity gate (valid iff C_KR * N < 2^key_size), following
-    Boura et al. -- their tables report and gate on exactly this quantity.
+    """Final Summary block.
 
-    The completion line below is reported, never added to T: after the peel, the
-    surviving triplets each fix `total_K_bits` of the key and the rest is filled in
-    by search, at a cost of
+    Reports the Boura et al. quantities and nothing else: `C_KR`, the guess basis
+    size, `T = C_KR * N`, and whether `T < 2^key_size`. Their tables report and gate
+    on exactly this, with the data complexity excluded.
 
-        N * 2^(|K| - F) * 2^(key_size - |K|)  =  N * 2^(key_size - F)
+    Two quantities the engine also computes are deliberately NOT printed here, to
+    keep the block to what the convention defines. Both stay in the result dict for
+    a caller that wants them:
 
-    in which |K| cancels -- only the total filtering F decides it. F and N are both
-    fixed before the greedy starts, so this term is the same whatever order the
-    S-boxes are peeled in; the greedy can only move T. It is printed because it is
-    a floor on the whole attack, and on a short distinguisher (few active S-boxes,
-    hence small F) it is the term that dominates.
-
-    `total_K_bits` is printed as the GUESS BASIS rather than as "key bits
-    recovered", because it counts variables, not entropy. AutoGuess may guess key
-    material anywhere in the key schedule -- a register bit at round 4 as readily as
-    a master-key bit -- and two such variables need not be independent, so the count
-    bounds the key entropy fixed rather than equalling it. AES 1+3+1 makes the point
-    by reporting 160 for a 128-bit key. The direction is safe: an inflated count
-    inflates the per-step work and hence T, never the reverse, and the completion
-    term above does not use it at all.
+      * `total_filter_bits`, the summed per-S-box filtering;
+      * `completion_log2` = `N * 2^(key_size - F)`, the cost of filling in the key
+        bits the peel did not determine. It is not part of `T` under this
+        convention, and `|K|` cancels out of it, so it is unaffected by the guess
+        basis being a count of variables rather than of entropy.
     """
     print("\nSummary")
     print(f"  C_KR (ESTIMATE)      : 2^{C_KR_log2:.2f}")
-    print(f"  Guess basis          : {total_K_bits} of {key_size_bits} bits   "
-          f"(basis size; an upper bound on the key entropy fixed)")
+    print(f"  Guess basis          : {total_K_bits}")
     print(f"  T = C_KR * N         : 2^{T_log2:.2f}   "
           f"(= 2^{C_KR_log2:.2f} * 2^{N_log2:.2f}; key-recovery work, data cost excluded)")
-    print(f"  Total filter F       : {total_filter_bits:.2f} bits")
-    completion_log2 = N_log2 + key_size_bits - total_filter_bits
-    binds = "DOMINATES T" if completion_log2 > T_log2 else "below T"
-    print(f"  Key completion       : 2^{completion_log2:.2f}   "
-          f"(= N * 2^({key_size_bits} - F); {binds}, not included in T)")
     if D_log2 is not None and block_bits is not None and D_log2 > block_bits:
         print(f"  [WARN] D = 2^{D_log2:.2f} exceeds the 2^{block_bits} codebook: "
               f"the attack needs more data than the cipher has.")

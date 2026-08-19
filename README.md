@@ -1,5 +1,3 @@
-# key_reco
-
 Differential **key-recovery** cost estimation on top of
 [OCP](https://github.com/Open-CP/OCP) and AutoGuess.
 
@@ -95,20 +93,17 @@ attack (`2 + 14 + 1`, 17 S-boxes) takes about 4 minutes.
 ```
 Trail                          what the distinguisher gives: p, d_in, d_out, N
 Ordering                       one row per S-box: key bits, filter, work, pairs left
-Summary                        C_KR, T = C_KR * N, F, the key-completion floor,
-                               and whether T < 2^keysize
+Summary                        C_KR, the guess basis, T = C_KR * N, and whether
+                               T < 2^keysize
 ```
 
-`T = C_KR * N` is the cost of the key-recovery step and decides validity, following
-Boura et al.: their tables report and gate on exactly this quantity, with the data
-complexity deliberately excluded.
+`T = C_KR * N` is the time complexity and decides validity, following Boura et al.:
+their tables report and gate on exactly this quantity, with the data complexity
+deliberately excluded.
 
-`T` is not the whole attack. The key bits the peel does not determine are filled in
-by search over the surviving triplets, at `N * 2^(keysize - F)` where `F` is the
-total filtering — printed as `Key completion`. Both `N` and `F` are fixed before the
-greedy runs, so no ordering can change that term; it is a floor on the attack, and
-on a short distinguisher (few active S-boxes, hence small `F`) it is the term that
-dominates. The Summary flags which of the two binds.
+The result dict carries more than the Summary prints — `total_filter_bits` and
+`completion_log2` among them — for a caller that wants to go further than the
+convention.
 
 ## Layout
 

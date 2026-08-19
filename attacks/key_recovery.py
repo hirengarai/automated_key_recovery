@@ -342,7 +342,6 @@ def search_key_recovery(cipher, goal="KEYRECOVERY_DIFF", R_d=None, r_b=0, r_f=0,
               f"relation can be found at all.")
     print_summary(
         C_KR_log2=C_KR_log2, N_log2=N0_log2, total_K_bits=total_K_bits, T_log2=T_log2,
-        total_filter_bits=total_filter_bits,
         key_size_bits=key_size_bits, valid_attack=valid_attack,
         D_log2=D_log2, block_bits=block_bits,
     )

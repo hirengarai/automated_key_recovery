@@ -55,5 +55,4 @@ def sweep_skinny_64():
 
 
 if __name__ == '__main__':
-
     sweep_skinny_64()

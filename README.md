@@ -105,6 +105,89 @@ The result dict carries more than the Summary prints — `total_filter_bits` and
 `completion_log2` among them — for a caller that wants to go further than the
 convention.
 
+## Two worked examples
+
+The two ways a distinguisher can reach the estimator, each with the output it
+actually produces. Both were run on `python-sat 1.9.dev2`; the `Ordering` block is
+elided, as it is one row per active S-box.
+
+### The distinguisher is given: PRESENT-80, `2 + 14 + 1`
+
+`test/key_recovery/present_80_attack.py`. Wang's 14-round trail is published, so it
+is pinned rather than searched — `build_manual_trail` takes its weight and its two
+differences and reads the trail's shape off the cipher:
+
+```python
+trail = build_manual_trail(nbr_words=perm.nbr_words, word_bitsize=perm.word_bitsize,
+                           last_layer=perm.nbr_layers - 1, R_d=R_d,
+                           weight=62, delta_in=0x0700000000000700,
+                           delta_out=0x0000000900000009)
+distinguisher = None          # nothing to search
+```
+
+```
+Trail
+  weight p       = 62
+  active S-boxes = 17
+  d_in           = 48
+  d_out          = 6
+  N              = 2^52.00
+  D (data)       = 2^63.00
+  M (memory)     = 2^48.00
+
+Summary
+  Per pair cost of key-recovery (ESTIMATE C_KR)      : 2^9.46
+  Guess basis          : 53
+  T = C_KR * N         : 2^61.46
+  Valid attack         : Yes  (T < 2^80)
+--- Total Time ---: 200.79 seconds
+```
+
+About 3 minutes, nearly all of it the greedy peel over 17 S-boxes. This is the
+number to compare against: with the trail pinned, nothing here depends on the
+solver version, so `T = 2^61.46` is reproducible. Boura et al. report `C_KR = 2^8`,
+`T = 2^60` for the same attack; the 1.46-bit gap is the estimate being an upper
+bound, not a disagreement about the attack.
+
+### The distinguisher is searched: SKINNY-64-64, `1 + 5 + 1`
+
+`test/key_recovery/skinny_64_attack.py`. No published trail, so the estimator is
+handed a permutation and finds a minimum-weight one itself:
+
+```python
+trail = None                                        # search, do not pin
+distinguisher = SKINNY_PERMUTATION(r=R_d, version=64)
+```
+
+```
+Trail
+  weight p       = 24
+  active S-boxes = 14
+  d_in           = 20
+  d_out          = 8
+  N              = 2^0.00
+  D (data)       = 2^25.00
+  M (memory)     = 2^25.00
+
+Summary
+  Per pair cost of key-recovery (ESTIMATE C_KR)      : 2^5.26
+  Guess basis          : 4
+  T = C_KR * N         : 2^5.26
+  Valid attack         : Yes  (T < 2^64)
+--- Total Time ---: 78.29 seconds
+```
+
+Under a minute and a half, the trail search included. `N = 2^0` — one pair — because
+a 5-round distinguisher on a 32-round cipher is far from a threat; this is a shape
+check on the pipeline, not a cryptanalytic claim. Read `T = 2^5.26` as "the machinery
+runs end to end", and note that it is `C_KR` alone here, since `N` contributes nothing.
+
+The caveat from **Install** applies to this second form only: the minimum-weight
+trail is generally not unique, so a different `python-sat` may return a different —
+equally optimal — trail and move every number below it. It has held so far for this
+script, `T = 2^5.26` on 1.9.dev2 and on 1.9.dev15 alike, but pin the trail or the
+solver version for anything you intend to publish.
+
 ## Layout
 
 ```

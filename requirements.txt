@@ -21,11 +21,20 @@ pytest                # test/key_recovery/test_*.py only; not needed to run an a
 # On python-sat in particular: attacks that inject a published distinguisher
 # (build_manual_trail) are insensitive to its version -- PRESENT-80 and
 # RECTANGLE-80 give bit-identical reports under 1.9.dev2 and 1.9.dev13. Attacks
-# that SEARCH for their distinguisher are not: the minimum-weight trail is
-# generally not unique, and different python-sat versions return different
-# (equally optimal) trails. skinny_64_attack.py yields d_in/d_out = 40/40 under
-# 1.9.dev2 and 16/60 under 1.9.dev5 and later. Pin the distinguisher, or the
-# python-sat version, for anything you intend to publish.
+# that SEARCH for their distinguisher carry no such guarantee: the minimum-weight
+# trail is generally not unique, so nothing forces two solver versions to return
+# the same one. Pin the distinguisher, or the python-sat version, for anything you
+# intend to publish.
+#
+# What cannot be said is that they are known to disagree. This file previously
+# recorded skinny_64_attack.py giving d_in/d_out = 40/40 under 1.9.dev2 and 16/60
+# under 1.9.dev5 and later; that does not reproduce. The 40/40 figure was measured
+# 2026-08-05, before three estimator changes landed, and is a CODE difference
+# misattributed to the solver -- see the 2026-08-18 entry in CHANGELOG.md. On the
+# current code dev2 and dev15 return a byte-identical trail (input difference
+# 0000200000020220, Total Weight 24, rounds_diff_weight [8, 4, 4, 4, 4]) and
+# identical figures, d_in/d_out = 20/8 and T = 2^5.26. Re-confirmed on 1.9.dev2
+# 2026-08-19, including two consecutive runs producing identical reports.
 
 # NOT required for key recovery. Each is imported behind a try/except and only
 # prints a warning when missing: gurobipy (no Gurobi licence needed), pyscipopt,

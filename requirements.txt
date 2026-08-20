@@ -1,8 +1,15 @@
 # Dependencies for the differential key-recovery attacks
-# (test/key_recovery/) on a clean machine. Verified from an empty venv on both
-# Python 3.12.13 and 3.14.3: with exactly these, present_80_attack.py,
+# (test/key_recovery/) on a clean machine. Verified from an empty venv on
+# Python 3.10.21, 3.12.13 and 3.14.3: with exactly these, present_80_attack.py,
 # rectangle_attack.py, skinny_64_attack.py and run_attack.py all run to
-# completion. Re-verified 2026-08-18 from an empty venv on 3.12.13.
+# completion. Re-verified 2026-08-18 from an empty venv on 3.12.13, and
+# 2026-08-20 on 3.10.21.
+#
+# 3.10 is the floor, and it is a real one: tools/relation_generator_modules/
+# emitter.py uses zip(..., strict=True), which arrives in 3.10, and the
+# ValueError it raises is load-bearing there. Nothing in the tree needs a later
+# version -- all 154 modules parse at feature_version=(3,10) and no post-3.10
+# stdlib API is used.
 #
 #   python3 -m venv env
 #   ./env/bin/pip install -r requirements.txt
@@ -17,6 +24,14 @@ pytest                # test/key_recovery/test_*.py only; not needed to run an a
 # Versions last verified (2026-08-18): python-sat 1.9.dev15 on Python 3.12.13.
 # Earlier runs used numpy 2.5.2, python-sat 1.9.dev13, py-aiger 8.1.0,
 # graphviz 0.21, dot2tex 2.12.0.
+#
+# The supported range spans two dependency generations, because pip resolves a
+# different set on the floor than at the top. On 3.10.21 (2026-08-20) it gave
+# numpy 2.2.6 and py-aiger 7.0.0 -- numpy 2.3 and later require 3.11+ -- against
+# numpy 2.5.2 and py-aiger 8.1.0 on 3.12. Neither difference moves a result:
+# 3.10.21 and 3.12.13 return byte-identical Trail and Summary blocks for
+# present_80_attack.py (T = 2^61.46) and skinny_64_attack.py (T = 2^5.26), and
+# all 48 unit tests pass on both.
 #
 # On python-sat in particular: attacks that inject a published distinguisher
 # (build_manual_trail) are insensitive to its version -- PRESENT-80 and

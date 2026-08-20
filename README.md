@@ -11,7 +11,7 @@ It can also sweep many round splits and report the best attack.
 
 ## Install
 
-Python 3.12 or 3.14, and six packages — five to run an attack, plus pytest for the
+Python 3.10 or later and six packages — five to run an attack, plus pytest for the
 tests. No solver licence is required: key recovery runs entirely on the open-source
 SAT backend, and Gurobi, SCIP, OR-Tools, Z3 and MiniZinc are all optional.
 
@@ -19,9 +19,6 @@ SAT backend, and Gurobi, SCIP, OR-Tools, Z3 and MiniZinc are all optional.
 python3 -m venv env
 ./env/bin/pip install -r requirements.txt
 ```
-
-Build your own virtualenv rather than copying someone else's — the one in `env312/`
-is machine-specific and is not part of the source.
 
 Two things to know before comparing numbers with someone else:
 
@@ -108,8 +105,10 @@ convention.
 ## Two worked examples
 
 The two ways a distinguisher can reach the estimator, each with the output it
-actually produces. Both were run on `python-sat 1.9.dev2`; the `Ordering` block is
-elided, as it is one row per active S-box.
+actually produces. Unlike `run_attack.py`, both scripts have their split and their
+distinguisher fixed in the file, so they are run as they ship — nothing to edit
+first. Both were run on `python-sat 1.9.dev2`; the `Ordering` block is elided, as it
+is one row per active S-box.
 
 ### The distinguisher is given: PRESENT-80, `2 + 14 + 1`
 
@@ -123,6 +122,10 @@ trail = build_manual_trail(nbr_words=perm.nbr_words, word_bitsize=perm.word_bits
                            weight=62, delta_in=0x0700000000000700,
                            delta_out=0x0000000900000009)
 distinguisher = None          # nothing to search
+```
+
+```
+./env/bin/python test/key_recovery/present_80_attack.py
 ```
 
 ```
@@ -157,6 +160,10 @@ handed a permutation and finds a minimum-weight one itself:
 ```python
 trail = None                                        # search, do not pin
 distinguisher = SKINNY_PERMUTATION(r=R_d, version=64)
+```
+
+```
+./env/bin/python test/key_recovery/skinny_64_attack.py
 ```
 
 ```
@@ -268,27 +275,27 @@ tests, none of which starts a solver. The `*_attack.py` and `sweep_*.py` runs ta
 minutes each and are deliberately not named `test_*` so pytest does not collect
 them.
 
-There is no registry — any OCP block cipher with an S-box layer works, so adding a
+<!-- There is no registry — any OCP block cipher with an S-box layer works, so adding a
 cipher means importing it and writing the two factories. Two known exceptions: GIFT
 cannot search a distinguisher (`attack_trace.save_json` raises `Object of type
 GIFT_Sbox is not JSON serializable`, in upstream OCP too), so it must be given a
 published one; and LBlock's differential search returns weight 0 for a non-zero
 trail, so its `p` — and everything derived from it — is meaningless. Both are
-recorded in `CHANGELOG.md`.
+recorded in `CHANGELOG.md`. -->
 
-The estimate is an upper bound: the difference sets are tracked as per-word
+<!-- The estimate is an upper bound: the difference sets are tracked as per-word
 patterns, which over-approximate when a linear layer mixes words, so costs are
 conservative rather than tight. `sum(filter) == d_in + d_out` is NOT a theorem — it
 holds only when no boundary bit is forced, words fill, and the extension's linear
 layers are bit permutations (PRESENT and GIFT happen to satisfy all three). Where it
 does not hold the filtering is under-counted, so the reported cost is too high
-rather than too low. See `docs/design/key-recovery-design.md`.
+rather than too low. See `docs/design/key-recovery-design.md`. -->
 
 Only one attack script may run at a time on a given checkout: OCP writes its
 model to a fixed path under `files/`, keyed by cipher and goal, so two concurrent
 runs at the same round count overwrite each other's model.
 
-See `CHANGELOG.md` and `docs/design/key-recovery-design.md` for the detail.
+<!-- See `CHANGELOG.md` and `docs/design/key-recovery-design.md` for the detail. -->
 
 ## Reference
 

@@ -3,8 +3,9 @@ TWINE-80: sweep with a CUSTOM definition of "best"
 
 `objective` takes a callable as well as the two names. It receives one result row
 and returns a sort key; lowest wins. The row is a plain dict with `r_b`, `R_d`,
-`r_f`, `total_rounds`, `T_log2`, `d_in`, `d_out` and `key_bits`, so any ranking
-expressible in those is available.
+`r_f`, `total_rounds`, `T_log2`, `C_KR_log2`, `N0_log2`, `d_in`, `d_out` and
+`key_bits`, so any ranking expressible in those is available -- including one on
+the key-recovery work alone, `lambda row: row["C_KR_log2"]`.
 
 The one below asks for the best complexity PER ROUND ATTACKED -- an attack reaching
 one more round is worth a good deal of extra work, but not unboundedly much. Neither

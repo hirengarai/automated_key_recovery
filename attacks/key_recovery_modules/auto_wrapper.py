@@ -171,7 +171,12 @@ def auto_key_recovery(cipher_factory, perm_factory, *, key_bits,
             _log(verbose, row)
             continue
 
+        # C_KR and N are carried, not just T: T alone cannot separate two splits
+        # that cost the same for different reasons, and C_KR is the half this tool
+        # estimates -- N follows from the trail's weight. Keeping both also makes
+        # objective=lambda r: r["C_KR_log2"] expressible.
         row.update(T_log2=round(est["T_log2"], 2),
+                   C_KR_log2=round(est["C_KR_log2"], 2), N0_log2=round(est["N0_log2"], 2),
                    d_in=est["d_in_bits"], d_out=est["d_out_bits"],
                    key_bits=est["key_size_bits"], valid=est["T_log2"] < target) # strict, as in the estimator
         results.append(row)
@@ -195,7 +200,8 @@ def _log(verbose, row):
         print(f"  [skip] {tag:<34} {row['skipped']}")
     else:
         mark = "OK " if row["valid"] else "over"
-        print(f"  [{mark}] {tag:<34} T=2^{row['T_log2']}  "
+        print(f"  [{mark}] {tag:<34} T=2^{row['T_log2']} "
+              f"= 2^{row['C_KR_log2']}*2^{row['N0_log2']}  "
               f"d_in={row['d_in']:g} d_out={row['d_out']:g}")
 
 
@@ -211,4 +217,6 @@ def _print_summary(cipher_name, target, objective, best, results):
     print(f"    rounds attacked : {best['total_rounds']} "
           f"(r_b={best['r_b']}, R_d={best['R_d']}, r_f={best['r_f']})")
     print(f"    time complexity : 2^{best['T_log2']}  (< 2^{target})")
+    print(f"    cost per pair   : C_KR = 2^{best['C_KR_log2']} "
+          f"over N = 2^{best['N0_log2']} pairs")
     print(f"    d_in={best['d_in']:g}  d_out={best['d_out']:g}  key={best['key_bits']} bits")
